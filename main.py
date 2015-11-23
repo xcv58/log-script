@@ -1,4 +1,6 @@
-import click, os
+#!/usr/bin/env python3
+
+import click
 from loader import LogLoader
 
 
