@@ -30,9 +30,10 @@ def gen_json(line_list):
                 level = True
         try:
             json_obj = json.loads(line[index:])
+            yield (tag, json_obj)
         except json.decoder.JSONDecodeError as e:
             print(line, e)
-        yield (tag, json_obj)
+            pass
 
 
 def gen_opener(filename_list) -> GeneratorExit:
