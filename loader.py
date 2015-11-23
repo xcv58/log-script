@@ -3,6 +3,7 @@ import fnmatch
 import gzip
 import bz2
 import re
+import json
 
 
 def gen_concatenate(iterators):
@@ -15,6 +16,23 @@ def gen_grep(pattern, line_list):
     for line in line_list:
         if pat.search(line):
             yield line
+
+
+def gen_json(line_list):
+    for line in line_list:
+        index = line.find('{')
+        level, tag = False, ''
+        for i in line.split():
+            if level:
+                tag = i
+                break
+            if i in ['V', 'D', 'I', 'W', 'E']:
+                level = True
+        try:
+            json_obj = json.loads(line[index:])
+        except json.decoder.JSONDecodeError as e:
+            print(line, e)
+        yield (tag, json_obj)
 
 
 def gen_opener(filename_list) -> GeneratorExit:
@@ -54,5 +72,6 @@ class LogLoader:
         iterator = gen_concatenate(files)
         if not pattern:
             pattern = '|'.join(tag_list)
-        return gen_grep(pattern, iterator)
+        grep_lines = gen_grep(pattern, iterator)
+        return gen_json(grep_lines)
 
