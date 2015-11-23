@@ -4,6 +4,5 @@ class Log:
 
     def process(self):
         lines = self.loader.get_generator(['Power-Battery-PhoneLab', 'Network-Telephony-PhoneLab'])
-        for i in lines:
-            print(i)
-
+        for tag, json in lines:
+            print(tag, json)
