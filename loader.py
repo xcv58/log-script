@@ -22,7 +22,8 @@ def gen_json(line_list):
     for line in line_list:
         index = line.find('{')
         level, tag = False, ''
-        for i in line.split():
+        tokens = line.split()
+        for i in tokens:
             if level:
                 tag = i
                 break
@@ -30,7 +31,7 @@ def gen_json(line_list):
                 level = True
         try:
             json_obj = json.loads(line[index:])
-            yield (tag, json_obj)
+            yield (tag, json_obj, tokens)
         except json.decoder.JSONDecodeError as e:
             print(line, e)
             pass
