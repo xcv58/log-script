@@ -77,3 +77,9 @@ class LogLoader:
         grep_lines = gen_grep(pattern, iterator)
         return gen_json(grep_lines)
 
+    def get_all(self):
+        filename = gen_find(self.directory, self.filename_pattern)
+        files = gen_opener(filename)
+        iterator = gen_concatenate(files)
+        return iterator
+
