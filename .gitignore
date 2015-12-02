@@ -1,5 +1,7 @@
 *.data
 
+notification/
+
 __pycache__/
 venv/
 .env
