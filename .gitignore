@@ -1,6 +1,7 @@
 *.data
 
 notification/
+pattern_lock/
 
 __pycache__/
 venv/

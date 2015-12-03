@@ -98,7 +98,7 @@ class Log:
         pickle.dump(device_dict, open(FILENAME, 'wb'))
 
 
-def test(data, feature_name):
+def calculate_correlation(data, feature_name):
     # print('correlation')
     labels = [i[-1] for i in data]
     values = []
@@ -162,7 +162,7 @@ def process(d, train_length):
                     'target_class_train',
                     'rate_4', 'rate_6', 'rate_8', 'rate_1',
                     'target_class')
-    values = test(matrix, feature_name)
+    values = calculate_correlation(matrix, feature_name)
     return values
 
     class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
