@@ -1,7 +1,24 @@
 import collections
 import pickle
+import scipy.stats
+from matplotlib import pyplot as plt
 
 FILENAME = __file__.replace('.py', '.data')
+
+TRAIN_SIZE = 60
+
+
+def max_min(array):
+    if array:
+        return max(array), min(array)
+    return 0, 0
+
+
+def get_success_fail_rate(json_list):
+    s = sum(1 for obj in json_list if obj['status'] == 'success')
+    f = sum(1 for obj in json_list if obj['status'] == 'fail')
+    rate = s / (s + f) if s+f > 0 else 0
+    return s, f, rate
 
 
 def update_key(des, src, k, none):
@@ -29,19 +46,33 @@ class Device:
         hit_factor = json_obj['hitFactor']
         self.d[hit_factor].append(json_obj)
 
-    def draw(self, device_id):
+    def draw(self, device_id, train_length):
         result = dict()
         # print(self.info)
+        success_unlock_size = []
+        fail_unlock_size = []
         for hit_factor, json_list in self.d.items():
-            s = sum(1 for obj in json_list if obj['status'] == 'success')
-            f = sum(1 for obj in json_list if obj['status'] == 'fail')
+            s, f, rate = get_success_fail_rate(json_list)
+            s_train, f_train, rate_train = get_success_fail_rate(json_list[:train_length])
+            result[hit_factor] = (rate, rate_train)
+
+            # s = sum(1 for obj in json_list if obj['status'] == 'success')
+            # f = sum(1 for obj in json_list if obj['status'] == 'fail')
+            pattern_size_key = 'patternSize'
+            success_unlock_size += [obj[pattern_size_key] for obj in json_list if obj['status'] == 'success']
+            fail_unlock_size += [obj[pattern_size_key] for obj in json_list if obj['status'] == 'fail']
+            # print('success', [obj[pattern_size_key] for obj in json_list if obj['status'] == 'success'])
+            # print('fail', [obj[pattern_size_key] for obj in json_list if obj['status'] == 'fail'])
             # print("{}\t{:.2f}".format(hit_factor, s/(s+f)), len(json_list), s, f)
-            result[hit_factor] = s/(s+f)
             # for key, items in itertools.groupby(sorted(json_list, key=lambda x: x['status']), lambda x: x['status']):
             #     print(key, sum(1 for i in items))
             # for obj in json_list:
             #     print(obj['status'], obj['patternSize'])
-        return [result, self.info]
+
+        s_max, s_min = max_min(success_unlock_size)
+        f_max, f_min = max_min(fail_unlock_size)
+        feature = (f_max, f_min, s_max, s_min)
+        return [result, self.info, feature]
 
 
 class Log:
@@ -67,15 +98,28 @@ class Log:
         pickle.dump(device_dict, open(FILENAME, 'wb'))
 
 
-if __name__ == '__main__':
-    d = pickle.load(open(FILENAME, 'rb'))
+def test(data, feature_name):
+    # print('correlation')
+    labels = [i[-1] for i in data]
+    values = []
+    for index in range(5, len(data[0])):
+        label = feature_name[index]
+        feature = [i[index] for i in data]
+        correlation, p_value = scipy.stats.pearsonr(feature, labels)
+        # print(index, '{:.3f}\t{:.5f}'.format(correlation, p_value), label, sep='\t')
+        values.append((correlation, label))
+    return values
+
+
+def process(d, train_length):
     res = []
     total_device = len(d)
     valid = 0
     total_info = 0
     total_both = 0
-    for key, dev in d.items():
-        success_dict, info = dev.draw(key)
+    matrix = []
+    for device_id, dev in d.items():
+        success_dict, info, (f_max, f_min, s_max, s_min) = dev.draw(device_id, train_length)
 
         gender = info.get('phonelab_gender', '?')
         age = info.get('phonelab_age', '?')
@@ -87,18 +131,63 @@ if __name__ == '__main__':
             total_info += 1
 
         if success_dict:
+            target_class = max(success_dict.items(), key=lambda x: x[1][0])[0]
+            target_class_train = max(success_dict.items(), key=lambda x: x[1][1])[0]
             if gender != '?' or age != '?' or desktop != '?' or laptop != '?' or another_phone != '?':
                 total_both += 1
             valid += 1
             # print(key)
-            rate_4 = success_dict.get(0.4, '?')
-            rate_6 = success_dict.get(0.6, '?')
-            rate_8 = success_dict.get(0.8, '?')
-            rate_1 = success_dict.get(1.0, '?')
-            print(gender, age, desktop, laptop, another_phone, rate_4, rate_6, rate_8, rate_1)
+            rate_4, rate_4_train = success_dict.get(0.4, (0, 0))
+            rate_6, rate_6_train = success_dict.get(0.6, (0, 0))
+            rate_8, rate_8_train = success_dict.get(0.8, (0, 0))
+            rate_1, rate_1_train = success_dict.get(1.0, (0, 0))
+            # print(gender, age, desktop, laptop, another_phone,
+            #       f_min, f_max, s_min, s_max,
+            #       rate_4_train, rate_6_train, rate_8_train, rate_1_train,
+            #       target_class_train,
+            #       rate_4, rate_6, rate_8, rate_1,
+            #       target_class)
+            matrix.append((gender, age, desktop, laptop, another_phone,
+                           f_min, f_max, s_min, s_max,
+                           rate_4_train, rate_6_train, rate_8_train, rate_1_train,
+                           target_class_train,
+                           rate_4, rate_6, rate_8, rate_1,
+                           target_class))
             res += [success_dict]
+            pass
+        pass
+    feature_name = ('gender', 'age', 'desktop', 'laptop', 'another_phone',
+                    'f_min', 'f_max', 's_min', 's_max',
+                    'rate_4_train', 'rate_6_train', 'rate_8_train', 'rate_1_train',
+                    'target_class_train',
+                    'rate_4', 'rate_6', 'rate_8', 'rate_1',
+                    'target_class')
+    values = test(matrix, feature_name)
+    return values
 
-    features = [sorted(i.items(), key=lambda x:x[1], reverse=True) for i in res]
-    features = [i for i in features if i]
-    print([i[0][0] for i in features])
-    print(valid, total_info, total_both, total_device, valid/total_device)
+    class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
+    # print(collections.Counter(class_labels))
+    # print(collections.Counter([max(i.items(), key=lambda x: x[1][1])[0] for i in res]))
+    # print(valid, total_info, total_both, total_device, valid / total_device)
+
+
+if __name__ == '__main__':
+    loaded_data = pickle.load(open(FILENAME, 'rb'))
+    x = range(10, 100, 1)
+    y = []
+    for i in x:
+        # print('train_length', i)
+        y.append(process(loaded_data, i))
+    labels = [i[1] for i in y[0]]
+    print(labels)
+    for i in range(len(labels)):
+        nums = [j[i][0] for j in y]
+        c_max, c_min = max_min(nums)
+        limit = 0.3
+        if abs(c_max) > limit or abs(c_min) > limit:
+            plt.plot(x, nums, label=labels[i], linewidth=1.0)
+    # plt.plot(x, y)
+    plt.legend()
+    plt.legend(loc='upper right', prop={'size': 9})
+    plt.ylim((-1.2, 1.2))
+    plt.show()
