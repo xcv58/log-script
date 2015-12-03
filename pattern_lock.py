@@ -2,6 +2,15 @@ import collections
 import pickle
 import scipy.stats
 from matplotlib import pyplot as plt
+from sklearn import tree
+from sklearn import svm
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn import cross_validation
+from sklearn.neighbors.nearest_centroid import NearestCentroid
+from sklearn.cross_validation import StratifiedKFold
+from sklearn.externals.six import StringIO
 
 FILENAME = __file__.replace('.py', '.data')
 
@@ -17,7 +26,7 @@ def max_min(array):
 def get_success_fail_rate(json_list):
     s = sum(1 for obj in json_list if obj['status'] == 'success')
     f = sum(1 for obj in json_list if obj['status'] == 'fail')
-    rate = s / (s + f) if s+f > 0 else 0
+    rate = s / (s + f) if s + f > 0 else 0
     return s, f, rate
 
 
@@ -111,6 +120,27 @@ def calculate_correlation(data, feature_name):
     return values
 
 
+def ml(matrix, feature_name, clf):
+    # matrix.sort(key=lambda x: x[-1])
+    X = [i[:-1] for i in matrix]
+    Y = [int(i[-1] * 10) for i in matrix]
+    # clf = clf.fit(X, Y)
+    # with open('test.dot', 'w') as f:
+    #     tree.export_graphviz(
+    #         clf,
+    #         out_file=f,
+    #         feature_names=feature_name[:-1]
+    #     )
+    cv = cross_validation.StratifiedKFold(Y, n_folds=3)
+    scores = cross_validation.cross_val_score(
+        clf,
+        X, Y,
+        cv=cv
+    )
+    print(scores, scores.mean(), scores.std() * 2)
+    pass
+
+
 def process(d, train_length):
     res = []
     total_device = len(d)
@@ -147,25 +177,44 @@ def process(d, train_length):
             #       target_class_train,
             #       rate_4, rate_6, rate_8, rate_1,
             #       target_class)
-            matrix.append((gender, age, desktop, laptop, another_phone,
-                           f_min, f_max, s_min, s_max,
-                           rate_4_train, rate_6_train, rate_8_train, rate_1_train,
-                           target_class_train,
-                           rate_4, rate_6, rate_8, rate_1,
-                           target_class))
+            vector = (
+                # gender, age, desktop, laptop, another_phone,
+                # f_min, f_max, s_min, s_max,
+                rate_4_train, rate_6_train, rate_8_train, rate_1_train,
+                target_class_train,
+                # rate_4, rate_6, rate_8, rate_1,
+                target_class
+            )
+            matrix.append(vector)
             res += [success_dict]
             pass
         pass
-    feature_name = ('gender', 'age', 'desktop', 'laptop', 'another_phone',
-                    'f_min', 'f_max', 's_min', 's_max',
-                    'rate_4_train', 'rate_6_train', 'rate_8_train', 'rate_1_train',
-                    'target_class_train',
-                    'rate_4', 'rate_6', 'rate_8', 'rate_1',
-                    'target_class')
-    values = calculate_correlation(matrix, feature_name)
-    return values
+    feature_name = (
+        # 'gender', 'age', 'desktop', 'laptop', 'another_phone',
+        # 'f_min', 'f_max', 's_min', 's_max',
+        # 'rate_4_train', 'rate_6_train', 'rate_8_train', 'rate_1_train',
+        'target_class_train',
+        # 'rate_4', 'rate_6', 'rate_8', 'rate_1',
+        'target_class'
+    )
+    # values = calculate_correlation(matrix, feature_name)
+    # return values
 
-    class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
+    # clf = svm.LinearSVC()
+    # clf = GaussianNB()
+    # clf = tree.DecisionTreeClassifier()
+    clf_list = list()
+    clf_list += [('svm', svm.SVC())]
+    clf_list += [('tree', tree.DecisionTreeClassifier())]
+    clf_list += [('NB', GaussianNB())]
+    clf_list += [('NCC', NearestCentroid())]
+    clf_list += [('Random Forest', RandomForestClassifier())]
+    clf_list += [('Extra Tree', ExtraTreesClassifier())]
+    for name, clf in clf_list:
+        print(name)
+        ml(matrix, feature_name, clf)
+
+    # class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
     # print(collections.Counter(class_labels))
     # print(collections.Counter([max(i.items(), key=lambda x: x[1][1])[0] for i in res]))
     # print(valid, total_info, total_both, total_device, valid / total_device)
@@ -173,21 +222,22 @@ def process(d, train_length):
 
 if __name__ == '__main__':
     loaded_data = pickle.load(open(FILENAME, 'rb'))
-    x = range(10, 100, 1)
-    y = []
-    for i in x:
-        # print('train_length', i)
-        y.append(process(loaded_data, i))
-    labels = [i[1] for i in y[0]]
-    print(labels)
-    for i in range(len(labels)):
-        nums = [j[i][0] for j in y]
-        c_max, c_min = max_min(nums)
-        limit = 0.3
-        if abs(c_max) > limit or abs(c_min) > limit:
-            plt.plot(x, nums, label=labels[i], linewidth=1.0)
-    # plt.plot(x, y)
-    plt.legend()
-    plt.legend(loc='upper right', prop={'size': 9})
-    plt.ylim((-1.2, 1.2))
-    plt.show()
+    process(loaded_data, 30)
+    # x = range(10, 100, 1)
+    # y = []
+    # for i in x:
+    #     # print('train_length', i)
+    #     y.append(process(loaded_data, i))
+    # labels = [i[1] for i in y[0]]
+    # print(labels)
+    # for i in range(len(labels)):
+    #     nums = [j[i][0] for j in y]
+    #     c_max, c_min = max_min(nums)
+    #     limit = 0.3
+    #     if abs(c_max) > limit or abs(c_min) > limit:
+    #         plt.plot(x, nums, label=labels[i], linewidth=1.0)
+    # # plt.plot(x, y)
+    # plt.legend()
+    # plt.legend(loc='upper right', prop={'size': 9})
+    # plt.ylim((-1.2, 1.2))
+    # plt.show()
