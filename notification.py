@@ -39,6 +39,8 @@ class Device:
 
     def add(self, json_obj, tag):
         self.raw.append((tag, json_obj))
+
+    def one_json(self, json_obj):
         action = json_obj['Action']
         if is_target_action(action):
             pkg = json_obj['package']
@@ -54,6 +56,10 @@ class Device:
                 self.d[pkg].append(i)
         elif action == 'life_cycle':
             self._update_status(json_obj)
+
+    def process(self, device_id):
+        print(device_id)
+        pass
 
     def draw(self, device_id):
         plt.clf()
@@ -103,8 +109,9 @@ class Log:
 if __name__ == '__main__':
     d = pickle.load(open(FILENAME, 'rb'))
     for key, dev in d.items():
-        print(key)
-        dev.draw(key)
+        # print(key)
+        dev.process(key)
+        # dev.draw(key)
 
 # d = dict()
 # d['a'] = 1
