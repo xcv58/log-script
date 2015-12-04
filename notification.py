@@ -23,13 +23,17 @@ class Device:
     def __init__(self, ):
         self.d = collections.defaultdict(list)
         self.raw = list()
-        self.choice = '0'
+        self.choice = 0
+        self.notification_dict = set()
 
     def _update_status(self, json_obj):
         if json_obj['method'] == 'getMaybeAlternative':
             if json_obj['packageName'] == 'com.android.server.notification':
                 if json_obj['label'] == 'sort':
                     if json_obj['status'] == 'success':
+                        # if hasattr(self, 'notification_dict'):
+                        #     print(self.notification_dict)
+                        self.notification_dict = dict()
                         self.choice = json_obj['choice']
     # Maybe-Service-PhoneLab: {"Action":"life_cycle","method":"getMaybeAlternative","packageName":"com.android.server.notification","label":"sort","status":"success","choice":0,"timestamp":1448642448706,"uptimeNanos":59891102612815,"LogFormat":"1.1"}
 
@@ -40,12 +44,34 @@ class Device:
     def add(self, json_obj, tag):
         self.raw.append((tag, json_obj))
 
-    def one_json(self, json_obj):
+    def add_compare(self, json_obj):
+        status = json_obj['status']
+        if status == 'success' or status == 'equal':
+            left_pkg = json_obj['leftPkg']
+            right_pkg = json_obj['rightPkg']
+            l_score = json_obj['lScore']
+            r_score = json_obj['rScore']
+            self.notification_dict[left_pkg] = l_score
+            self.notification_dict[right_pkg] = r_score
+            pass
+        elif status == 'abort':
+            left_pkg = json_obj['leftPkg']
+            pass
+        elif status == 'cancel':
+            pass
+        else:
+            print('this could never happen', json_obj)
+        pass
+
+    def one_json(self, tag, json_obj):
         action = json_obj['Action']
         if is_target_action(action):
             pkg = json_obj['package']
             self._update_json(json_obj)
             self.d[pkg].append(json_obj)
+            notification_list = sorted(self.notification_dict.items(), key=lambda x: x[1], reverse=True)
+            array = [i for i, (pkg_name, score) in enumerate(notification_list) if pkg_name == pkg]
+            print(array)
         elif action == 'cleanAll':
             clean_list = json_obj['cleaned']
             for i in clean_list:
@@ -54,11 +80,15 @@ class Device:
                 pkg = i['package']
                 self._update_json(i)
                 self.d[pkg].append(i)
+        elif action == 'compare':
+            self.add_compare(json_obj)
         elif action == 'life_cycle':
             self._update_status(json_obj)
 
     def process(self, device_id):
         print(device_id)
+        for tag, json_obj in self.raw:
+            self.one_json(tag, json_obj)
         pass
 
     def draw(self, device_id):
