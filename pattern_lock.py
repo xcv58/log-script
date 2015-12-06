@@ -120,24 +120,30 @@ def calculate_correlation(data, feature_name):
     return values
 
 
-def ml(matrix, feature_name, clf):
+def plot_tree(X, Y, feature_name, clf):
+    clf = clf.fit(X, Y)
+    with open('test.dot', 'w') as f:
+        tree.export_graphviz(
+            clf,
+            out_file=f,
+            feature_names=feature_name[:-1]
+        )
+    pass
+
+
+def ml(matrix, feature_name, clf, name=None):
     # matrix.sort(key=lambda x: x[-1])
     X = [i[:-1] for i in matrix]
     Y = [int(i[-1] * 10) for i in matrix]
-    # clf = clf.fit(X, Y)
-    # with open('test.dot', 'w') as f:
-    #     tree.export_graphviz(
-    #         clf,
-    #         out_file=f,
-    #         feature_names=feature_name[:-1]
-    #     )
-    cv = cross_validation.StratifiedKFold(Y, n_folds=3)
+    cv = cross_validation.StratifiedKFold(Y, n_folds=3, shuffle=True, random_state=0)
     scores = cross_validation.cross_val_score(
         clf,
         X, Y,
         cv=cv
     )
     print(scores, scores.mean(), scores.std() * 2)
+    if name == 'Decision Tree':
+        plot_tree(X, Y, feature_name, clf)
     pass
 
 
@@ -179,8 +185,12 @@ def process(d, train_length):
             #       target_class)
             vector = (
                 # gender, age, desktop, laptop, another_phone,
-                # f_min, f_max, s_min, s_max,
-                rate_4_train, rate_6_train, rate_8_train, rate_1_train,
+                # f_min, f_max,
+                # s_min, s_max,
+                # rate_4_train,
+                rate_6_train,
+                # rate_8_train,
+                # rate_1_train,
                 target_class_train,
                 # rate_4, rate_6, rate_8, rate_1,
                 target_class
@@ -191,8 +201,12 @@ def process(d, train_length):
         pass
     feature_name = (
         # 'gender', 'age', 'desktop', 'laptop', 'another_phone',
-        # 'f_min', 'f_max', 's_min', 's_max',
-        # 'rate_4_train', 'rate_6_train', 'rate_8_train', 'rate_1_train',
+        # 'f_min', 'f_max',
+        # 's_min', 's_max',
+        # 'rate_4_train',
+        'rate_6_train',
+        # 'rate_8_train',
+        # 'rate_1_train',
         'target_class_train',
         # 'rate_4', 'rate_6', 'rate_8', 'rate_1',
         'target_class'
@@ -204,15 +218,15 @@ def process(d, train_length):
     # clf = GaussianNB()
     # clf = tree.DecisionTreeClassifier()
     clf_list = list()
-    clf_list += [('svm', svm.SVC())]
-    clf_list += [('tree', tree.DecisionTreeClassifier())]
-    clf_list += [('NB', GaussianNB())]
-    clf_list += [('NCC', NearestCentroid())]
+    clf_list += [('SVM', svm.SVC())]
+    clf_list += [('Decision Tree', tree.DecisionTreeClassifier())]
+    clf_list += [('Naive Bayes', GaussianNB())]
+    clf_list += [('Nearest Centroid', NearestCentroid())]
     clf_list += [('Random Forest', RandomForestClassifier())]
     clf_list += [('Extra Tree', ExtraTreesClassifier())]
     for name, clf in clf_list:
         print(name)
-        ml(matrix, feature_name, clf)
+        ml(matrix, feature_name, clf, name)
 
     # class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
     # print(collections.Counter(class_labels))
