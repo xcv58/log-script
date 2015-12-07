@@ -3,6 +3,8 @@ import pickle
 
 import sys
 
+import itertools
+
 FILENAME = __file__.replace('.py', '.data')
 
 
@@ -35,7 +37,7 @@ class Device:
             self.json_list.append(json_obj)
         pass
 
-    def draw(self, device_id):
+    def get_pairs(self, device_id):
         key_unsync_result = 'unsyncResult'
         sync_count_dict = dict()
         d = dict()
@@ -44,6 +46,7 @@ class Device:
         result = []
         interact_message_set = set()
         self.json_list.sort(key=lambda x: x['timestamp'])
+        sync_interval = -1
         for obj in self.json_list:
             if obj['Action'] == 'sync' and not obj['upload'] and not obj['uiRefresh']:
                 sync_interval = obj['syncs'][0]['oldSyncInterval']
@@ -75,7 +78,7 @@ class Device:
                 uid = obj['uid']
                 message_id = obj['messageId']
                 sync_count = sync_count_dict.get(account_id, 0)
-                tmp = Message(account_id, uid, message_id, timestamp, sync_count)
+                tmp = Message(account_id, uid, message_id, timestamp, sync_count, sync_interval)
                 key = tmp.get_str()
                 if key in interact_message_set:
                     pass
@@ -88,7 +91,83 @@ class Device:
                 #     print(key, 'not in d')
                 # print('update', device_id, timestamp, account_id, uid, message_id)
         return result
-        pass
+
+    def get_feature_dict(self, device_id):
+        results = self.get_pairs(device_id)
+        if results:
+            print(device_id, len(self.json_list))
+            for receive, interact in results:
+                old_sync_count = receive.sync_count
+                new_sync_count = interact.sync_count
+                old_time = receive.timestamp
+                new_time = interact.timestamp
+                interval = (new_time - old_time) / 1000
+                # print(new_sync_count,
+                #       interact.sync_interval,
+                #       receive.sync_interval,
+                #       # old_sync_count, new_sync_count,
+                #       new_sync_count - old_sync_count,
+                #       interval, interact.get_str(),
+                #       sep='\t')
+                # print(receive.sync_interval, new_sync_count - old_sync_count, k)
+
+            sessions = []
+            group_data = itertools.groupby(results, key=lambda x: (x[1].sync_count, x[1].account_id))
+            for k, items in group_data:
+                # receive, interact = max(items, key=lambda x: x[0].timestamp)
+                # old_sync_count = receive.sync_count
+                # new_sync_count = interact.sync_count
+                # old_time = receive.timestamp
+                # new_time = interact.timestamp
+                # interval = (new_time - old_time) / 100
+                # print(new_sync_count, receive.sync_interval, old_sync_count, new_sync_count,
+                #       new_sync_count - old_sync_count,
+                #       interval, interact.get_str())
+                # print(receive.sync_interval, new_sync_count - old_sync_count, k)
+                array = []
+                for receive, interact in items:
+                    old_sync_count = receive.sync_count
+                    new_sync_count = interact.sync_count
+                    old_time = receive.timestamp
+                    new_time = interact.timestamp
+                    interval = (new_time - old_time) / 100
+                    array += [(new_sync_count - old_sync_count, interact.sync_interval, new_time, (new_time-old_time)/1000)]
+                    # print(new_sync_count, receive.sync_interval, old_sync_count, new_sync_count,
+                    #       new_sync_count - old_sync_count,
+                    #       interval, interact.get_str())
+                # print(k)
+                # for interval, sync_interval, time, time_sec in sorted(array, key=lambda x: (x[2], x[0])):
+                #     # print(interval, sync_interval, time, time_sec)
+                #     pass
+                tmp = sorted(array, key=lambda x: x[2])
+                # print([(i[2] - j[2]) / 1000 for i, j in zip(tmp[1:], tmp[:-1])])
+                # print(min(array, key=lambda x: (x[0], x[2])))
+                sessions.append(min(array, key=lambda x: (x[0], x[2])))
+                # print('')
+                # for receive, interact in results:
+                #     old_sync_count = receive.sync_count
+                #     new_sync_count = interact.sync_count
+                #     old_time = receive.timestamp
+                #     new_time = interact.timestamp
+                #     interval = (new_time - old_time) / 100
+                #     print(new_sync_count, receive.sync_interval, old_sync_count, new_sync_count,
+                #           new_sync_count - old_sync_count,
+                #           interval, interact.get_str())
+                # print(obj.sync_count, sync_count, obj.sync_interval, (timestamp-obj.timestamp)/1000)
+                pass
+            for key, items in itertools.groupby(sorted(sessions, key=lambda x: x[1]), key=lambda x: x[1]):
+                items = [i for i in items]
+                intervals = [i[0] for i in items]
+                times = [i[3] for i in items]
+                mean_interval = sum(intervals) / len(intervals)
+                weight_mean = sum([min(3, i) for i in intervals]) / len(intervals)
+                mean = sum(times) / len(times)
+                print(key, intervals)
+                # print(key, '{:.2f}\t{:.2f}\t{:7.2f}'.format(mean_interval, weight_mean, mean), sep='\t')
+                # print(key, '{:.2f}'.format(mean_interval, weight_mean, mean), sep='\t')
+            print(len(sessions))
+            # print(sessions)
+
 
 
 class Log:
@@ -119,20 +198,8 @@ class Log:
 
 if __name__ == '__main__':
     d = pickle.load(open(FILENAME, 'rb'))
-    count = 0
-    for device_id, dev in sorted(d.items()):
-        results = dev.draw(device_id)
-        if results:
-            count += 1
-            print(device_id, len(dev.json_list))
-            for receive, interact in results:
-                old_sync_count = receive.sync_count
-                new_sync_count = interact.sync_count
-                old_time = receive.timestamp
-                new_time = interact.timestamp
-                interval = (new_time - old_time) / 100
-                print(receive.sync_interval, old_sync_count, new_sync_count, new_sync_count - old_sync_count, interval, interact.get_str())
-                # print(obj.sync_count, sync_count, obj.sync_interval, (timestamp-obj.timestamp)/1000)
 
-            # print(len(results))
-    print(count)
+    for device_id, dev in sorted(d.items()):
+        dev.get_feature_dict(device_id)
+        # results = dev.get_pairs(device_id)
+
