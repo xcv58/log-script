@@ -8,6 +8,10 @@ import itertools
 FILENAME = __file__.replace('.py', '.data')
 
 
+def trim_time(s):
+    return s.split('.')[0]
+
+
 class Message:
     def __init__(self, account_id, uid, message_id, timestamp, sync_count, sync_interval=-1):
         self.account_id = account_id
@@ -30,11 +34,11 @@ class Device:
         self.json_list = list()
         self.info = {}
 
-    def add(self, json_obj):
+    def add(self, json_obj, date, time):
         if json_obj['Action'] == 'personal_information':
             self.info = json_obj
         else:
-            self.json_list.append(json_obj)
+            self.json_list.append((date, time, json_obj))
         pass
 
     def get_pairs(self, device_id):
@@ -45,13 +49,17 @@ class Device:
 
         result = []
         interact_message_set = set()
-        self.json_list.sort(key=lambda x: x['timestamp'])
+        self.json_list.sort(key=lambda x: x[2]['timestamp'])
         sync_interval = -1
-        for obj in self.json_list:
-            if obj['Action'] == 'sync' and not obj['upload'] and not obj['uiRefresh']:
+        for date, time, obj in self.json_list:
+            time_str = '{} {}'.format(date, time)
+            if obj['Action'] == 'sync' and not obj['upload']:
+            # if obj['Action'] == 'sync' and not obj['upload'] and not obj['uiRefresh']:
                 sync_interval = obj['syncs'][0]['oldSyncInterval']
                 account_id = obj['accountId']
-                sync_count_dict[account_id] = sync_count_dict.get(account_id, 0) + 1
+                sync_count_dict[account_id] = sync_count_dict.get(account_id, 0)
+                if not obj['uiRefresh']:
+                    sync_count_dict[account_id] = sync_count_dict.get(account_id, 0) + 1
                 sync_count = sync_count_dict[account_id]
                 sync_results = obj['syncResults']
                 if len(sync_results) == 1:
@@ -86,7 +94,7 @@ class Device:
                 if key in d:
                     obj = d[key]
                     # print(obj.sync_count, sync_count, obj.sync_interval, (timestamp-obj.timestamp)/1000)
-                    result.append((obj, tmp))
+                    result.append((obj, tmp, time_str))
                 # else:
                 #     print(key, 'not in d')
                 # print('update', device_id, timestamp, account_id, uid, message_id)
@@ -96,7 +104,7 @@ class Device:
         results = self.get_pairs(device_id)
         if results:
             print(device_id, len(self.json_list))
-            for receive, interact in results:
+            for receive, interact, time_str in results:
                 old_sync_count = receive.sync_count
                 new_sync_count = interact.sync_count
                 old_time = receive.timestamp
@@ -112,8 +120,14 @@ class Device:
                 # print(receive.sync_interval, new_sync_count - old_sync_count, k)
 
             sessions = []
-            group_data = itertools.groupby(results, key=lambda x: (x[1].sync_count, x[1].account_id))
-            for k, items in group_data:
+            time_intervals = [(j[1].timestamp - i[1].timestamp) * (j[1].sync_count-i[1].sync_count) for i, j in zip(results, results[1:])]
+            split_at = [i for i, dt in enumerate(time_intervals, 1) if dt >= 60000]
+
+            groups = [(i, results[i:j]) for i, j in zip([0] + split_at, split_at + [None])]
+
+            # group_data = itertools.groupby(results, key=lambda x: (x[1].sync_count, x[1].account_id))
+            # for k, items in group_data:
+            for k, items in groups:
                 # receive, interact = max(items, key=lambda x: x[0].timestamp)
                 # old_sync_count = receive.sync_count
                 # new_sync_count = interact.sync_count
@@ -125,20 +139,26 @@ class Device:
                 #       interval, interact.get_str())
                 # print(receive.sync_interval, new_sync_count - old_sync_count, k)
                 array = []
-                for receive, interact in items:
+                for receive, interact, time_str in items:
                     old_sync_count = receive.sync_count
                     new_sync_count = interact.sync_count
                     old_time = receive.timestamp
                     new_time = interact.timestamp
                     interval = (new_time - old_time) / 100
-                    array += [(new_sync_count - old_sync_count, interact.sync_interval, new_time, (new_time-old_time)/1000)]
+                    array += [(new_sync_count - old_sync_count,
+                               interact.sync_interval,
+                               new_time,
+                               (new_time-old_time)/1000,
+                               time_str + '\t' + str(new_sync_count)
+                               )]
                     # print(new_sync_count, receive.sync_interval, old_sync_count, new_sync_count,
                     #       new_sync_count - old_sync_count,
                     #       interval, interact.get_str())
                 # print(k)
-                # for interval, sync_interval, time, time_sec in sorted(array, key=lambda x: (x[2], x[0])):
-                #     # print(interval, sync_interval, time, time_sec)
-                #     pass
+                for interval, sync_interval, time, time_sec, time_str in sorted(array, key=lambda x: (x[2], x[0])):
+                    print(interval, sync_interval, time, '{: 9.1f}'.format(time_sec), time_str, sep='\t')
+                    pass
+                print('')
                 tmp = sorted(array, key=lambda x: x[2])
                 # print([(i[2] - j[2]) / 1000 for i, j in zip(tmp[1:], tmp[:-1])])
                 # print(min(array, key=lambda x: (x[0], x[2])))
@@ -169,7 +189,6 @@ class Device:
             # print(sessions)
 
 
-
 class Log:
     def __init__(self, loader):
         self.loader = loader
@@ -180,6 +199,8 @@ class Log:
         s = set()
         for tag, json_obj, tokens in lines:
             device_id = tokens[0]
+            date, time = tokens[3], tokens[4]
+            time = trim_time(time)
 
             pre = len(device_dict)
 
@@ -187,14 +208,15 @@ class Log:
             if pre != len(device_dict):
                 print(device_id)
 
-            device.add(json_obj)
+            device.add(json_obj, date, time)
             # print(tag, json)
             s.add(json_obj['Action'])
             # if json_obj['Action'] == 'android.intent.action.SIG_STR':
             #     print(json)
             pass
-        pickle.dump(device_dict, open(FILENAME, 'wb'))
+        print('load finish')
         print(s)
+        pickle.dump(device_dict, open(FILENAME, 'wb'))
 
 if __name__ == '__main__':
     d = pickle.load(open(FILENAME, 'rb'))
