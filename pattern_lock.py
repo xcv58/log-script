@@ -215,6 +215,7 @@ def process(d, train_length):
     )
     # values = calculate_correlation(matrix, feature_name)
     # return values
+    print(collections.Counter([i[-1] for i in matrix]))
 
     # clf = svm.LinearSVC()
     # clf = GaussianNB()
@@ -240,7 +241,8 @@ def process(d, train_length):
     print(len(results))
     results = list(zip(*results))
     for i, label in zip(results, legend):
-        print(label)
+        print(label,
+              sum([j[0] for j in i]) / len(i))
         print(sorted(['{:.4f}'.format(j[0]) for j in i]))
 
     # class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
