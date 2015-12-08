@@ -135,15 +135,16 @@ def ml(matrix, feature_name, clf, name=None):
     # matrix.sort(key=lambda x: x[-1])
     X = [i[:-1] for i in matrix]
     Y = [int(i[-1] * 10) for i in matrix]
-    cv = cross_validation.StratifiedKFold(Y, n_folds=3, shuffle=True, random_state=0)
+    cv = cross_validation.StratifiedKFold(Y, n_folds=2, shuffle=True, random_state=0)
     scores = cross_validation.cross_val_score(
         clf,
         X, Y,
         cv=cv
     )
-    print(scores, scores.mean(), scores.std() * 2)
+    # print(scores, scores.mean(), scores.std())
     if name == 'Decision Tree':
         plot_tree(X, Y, feature_name, clf)
+    return scores.mean(), scores.std()
     pass
 
 
@@ -182,15 +183,16 @@ def process(d, train_length):
             #       rate_4_train, rate_6_train, rate_8_train, rate_1_train,
             #       target_class_train,
             #       rate_4, rate_6, rate_8, rate_1,
-            #       target_class)
+            #       target_class,
+            #       sep='\t')
             vector = (
                 # gender, age, desktop, laptop, another_phone,
-                # f_min, f_max,
-                # s_min, s_max,
-                # rate_4_train,
+                f_min, f_max,
+                s_min, s_max,
+                rate_4_train,
                 rate_6_train,
-                # rate_8_train,
-                # rate_1_train,
+                rate_8_train,
+                rate_1_train,
                 target_class_train,
                 # rate_4, rate_6, rate_8, rate_1,
                 target_class
@@ -201,12 +203,12 @@ def process(d, train_length):
         pass
     feature_name = (
         # 'gender', 'age', 'desktop', 'laptop', 'another_phone',
-        # 'f_min', 'f_max',
-        # 's_min', 's_max',
-        # 'rate_4_train',
+        'f_min', 'f_max',
+        's_min', 's_max',
+        'rate_4_train',
         'rate_6_train',
-        # 'rate_8_train',
-        # 'rate_1_train',
+        'rate_8_train',
+        'rate_1_train',
         'target_class_train',
         # 'rate_4', 'rate_6', 'rate_8', 'rate_1',
         'target_class'
@@ -217,21 +219,34 @@ def process(d, train_length):
     # clf = svm.LinearSVC()
     # clf = GaussianNB()
     # clf = tree.DecisionTreeClassifier()
-    clf_list = list()
-    clf_list += [('SVM', svm.SVC())]
-    clf_list += [('Decision Tree', tree.DecisionTreeClassifier())]
-    clf_list += [('Naive Bayes', GaussianNB())]
-    clf_list += [('Nearest Centroid', NearestCentroid())]
-    clf_list += [('Random Forest', RandomForestClassifier())]
-    clf_list += [('Extra Tree', ExtraTreesClassifier())]
-    for name, clf in clf_list:
-        print(name)
-        ml(matrix, feature_name, clf, name)
+    results = []
+    for i in range(50):
+        clf_list = list()
+        clf_list += [('SVM', svm.SVC())]
+        clf_list += [('Decision Tree', tree.DecisionTreeClassifier())]
+        clf_list += [('Naive Bayes', GaussianNB())]
+        clf_list += [('Nearest Centroid', NearestCentroid())]
+        clf_list += [('Random Forest', RandomForestClassifier())]
+        clf_list += [('Extra Tree', ExtraTreesClassifier())]
+        legend = [name for name, _ in clf_list]
+        vector = []
+        for name, clf in clf_list:
+            mean, std = ml(matrix, feature_name, clf, name)
+            # print(name)
+            # print('{:.2f}\t{:.3f}'.format(mean, std))
+            vector.append((mean, std))
+        results.append(vector)
+
+    print(len(results))
+    results = list(zip(*results))
+    for i, label in zip(results, legend):
+        print(label)
+        print(sorted(['{:.4f}'.format(j[0]) for j in i]))
 
     # class_labels = [max(i.items(), key=lambda x: x[1][0])[0] for i in res]
     # print(collections.Counter(class_labels))
     # print(collections.Counter([max(i.items(), key=lambda x: x[1][1])[0] for i in res]))
-    # print(valid, total_info, total_both, total_device, valid / total_device)
+    print(valid, total_info, total_both, total_device, valid / total_device)
 
 
 if __name__ == '__main__':
